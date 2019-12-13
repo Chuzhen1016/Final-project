@@ -1,1 +1,179 @@
+---
+title: "Final project"
+name: "Chuzhen Wang"
+date: "12/07/2019"
+output: html_document
+---
+
+# Set Up
+
+## load packages
+
+```{r}
+# clean up workspace environment
+rm(list = ls())
+
+library(ggplot2)
+library(DataComputing)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+getwd()
+```
+
+
+# Data Access
+
+```{r}
+googleplaystore <- read.csv("googleplaystore.csv") 
+str(googleplaystore)
+
+googleplayreview <- read.csv("googleplaystore_user_reviews.csv")
+str(googleplayreview)
+
+```
+
+#Data Analysis
+
+### Research Question 1
+
+####Question a).What is the correlation between sentiment polarity and sentiment subjectivity of app reviews? 
+```{r}
+#Calculate the average sentiment polarity and sentiment subjectivity
+googleplayreviews <-
+  googleplayreview %>%
+  filter(Sentiment != "nan") %>%
+  group_by(App) %>%
+  summarise(total=n(),
+            avgPolarity= mean(Sentiment_Polarity),
+            avgSubjectivity = mean(Sentiment_Subjectivity)) 
+
+#plot the relationship between sentiment polarity and sentiment subjectivity
+regressionplot <-
+  googleplayreviews%>%
+  ggplot(aes(y = avgPolarity, x = avgSubjectivity))+
+  geom_point()+
+  geom_smooth(method="lm", se = FALSE)
+print(regressionplot + ggtitle("Correlation between Sentiment Polarity and Sentiment Subjectivty of App reviews "))
+
+```
+<br> Answer: From the plot, there is a strong, positive and linear relationship between Sentiment Polarity and Sentiment Subjectivty.
+
+####Question b).What app has both high values of sentiment polarity and subjectivity, which are greater than 0.7?
+```{r}
+#get the top 20 apps which has high sentiment Polarity 
+a <-
+  googleplayreviews %>%
+  arrange(desc(avgPolarity)) %>%
+  head(20)
+
+a %>%
+  ggplot(aes(x=avgPolarity, y=avgSubjectivity)) +
+  geom_point(aes(color=App))
+
+```
+<br> Answer: Daily Workouts - Exercise Fitness Routine Trainer and Google Slides have both high values of sentiment polarity and subjectivity which are greater than 0.7.
+
+###Research Question 2
+
+####Question: How many apps which have 0 reviews are last updated after 2017? 
+```{r}
+#transform time character to number
+Table <-
+  googleplaystore %>%
+  mutate(Date = ifelse((lubridate::mdy(Last.Updated)- lubridate::mdy("01-01-2017")) <= 0,"Before","After")) %>%
+  mutate(Update = lubridate::mdy(Last.Updated)) %>%
+  select(App, Date, Reviews, Update) %>%
+  na.omit() 
+Table
+
+#filter out apps whose reviews are 0
+c <-
+  Table %>%
+  filter(Reviews == "0") %>%
+  group_by(Date) %>%
+  summarise(total = n())
+  
+c
+```
+<br> Answer: We can see 527 out of total 596 apps which have 0 reviews are updated after 2017-01-01.
+
+###Research Question 3
+
+####Question: What apps contained in the googleplaystore_user_reviews dataset have high average rating which is greater than 4.6? Find the pattern of high rating apps.
+```{r}
+# unique App in googleplaystore dataset
+googleplaystore %>%
+  summarise(n_distinct(App))
+
+# unique App in googlestore_user_reviews dataset after NA value deleted 
+googleplayreviews %>%
+  summarise(n_distinct(App))
+
+#Join the tables of googleplaystore and googleplayreviews. Get the app whose average rating is not less than 4.8
+TopRating <-
+  googleplaystore %>%
+  inner_join(googleplayreviews) %>% 
+  select( App = App, Rating, Category,avgPolarity ) %>%
+  group_by(App,Category,avgPolarity) %>%
+  summarise(total=n(),
+            avgRating= mean(Rating)) %>%
+  filter(avgRating >= 4.7)
+TopRating
+
+#Inspect the average sentiment polartiy of high rating app 
+TopRating %>%
+  group_by(avgRating,avgPolarity) %>% 
+  summarise(count =n()) %>%
+  ggplot(aes(x=avgRating,y=avgPolarity, group=avgRating))+
+  geom_boxplot()
+
+TopRating %>%
+  ggplot(aes(x=avgRating,y=avgPolarity,color = Category))+
+  geom_point()
+
+```
+  
+<br> Answer: The TopRating table includes 64 Apps have greater than 4.6 average rating.From boxplot, we can see apps who have 4.8 average rating have highest variability of sentiment polarity since the range of middle boxplot is largest one.From the scatterplot, we can see the high rating apps mostly fall into 4.7 rating.
+
+###Research Question 4
+
+####How many apps are there which have common use words you're interested in? Examine them visually to find new app common name to add to the pattern, e.g. Free.
+
+```{r}
+#get the unique app names in googleplaystore dataset
+Distinctapp <-
+  googleplaystore %>%
+  group_by(App)%>%
+  summarise(total=n())
+Distinctapp
+
+#App names which have below expression I want to extratct
+pattern <- "(Art|Health|Google|Police|English|Beauty|Chat|Photo|Scan|Music|Free|Book|Mobile|Call|Learn|Home)"
+
+#Set of matches extracted
+AppNames <-
+  Distinctapp %>%
+  filter(grepl(pattern, App)) %>%
+  tidyr::extract(App, into = "name", regex = pattern)
+
+#frequency table
+AppNameFrequency <-
+  AppNames %>%
+  group_by(name) %>%
+  summarise(count =n()) %>%
+  mutate(name = reorder(name,desc(count))) %>%
+  arrange(desc(count))
+
+AppNameFrequency
+
+#bar chart of frequency
+AppNameFrequency %>%
+  ggplot(aes(x= name,y=count)) +
+  geom_bar(stat='identity',width=0.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1 ))
+
+```
+
+
 
